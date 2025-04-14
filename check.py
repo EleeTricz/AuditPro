@@ -1,5 +1,6 @@
 import psycopg2
 import pandas as pd
+from datetime import datetime
 
 # Configuração do banco PostgreSQL
 DB_CONFIG = {
@@ -41,7 +42,7 @@ def obter_funcionarios_por_empresa():
         cur = conn.cursor()
         
         cur.execute("""
-            SELECT e.nome AS empresa, f.nome AS funcionario
+            SELECT e.nome AS empresa, f.nome AS funcionario, f.data_admissao
             FROM funcionarios f
             JOIN empresas e ON f.empresa_id = e.id
         """)
@@ -51,53 +52,63 @@ def obter_funcionarios_por_empresa():
         conn.close()
         
         empresas = {}
-        for empresa, funcionario in funcionarios:
+        for empresa, funcionario, data_admissao in funcionarios:
             if empresa not in empresas:
                 empresas[empresa] = []
-            empresas[empresa].append(funcionario)
+            empresas[empresa].append((funcionario, data_admissao))
         
         return empresas
     except Exception as e:
         print("Erro ao buscar funcionários:", e)
         return {}
 
-def gerar_relatorio():
-    """ Função chamada pela interface para gerar o relatório de auditoria. """
+def gerar_relatorio(empresa_filtro=None):
+    """ Gera um relatório de auditoria, podendo ser filtrado por uma empresa específica. """
     documentos_existentes = obter_documentos_existentes()
     empresas_funcionarios = obter_funcionarios_por_empresa()
     documentos_faltantes = []
     
     for empresa, funcionarios in empresas_funcionarios.items():
+        if empresa_filtro and empresa != empresa_filtro:
+            continue
+        
         for ano in range(PERIODO_INICIO[0], PERIODO_FIM[0] + 1):
             for mes in range(1, 13):
                 if (ano == PERIODO_FIM[0] and mes > PERIODO_FIM[1]):
                     break  
                 
+                # Verificação da folha de pagamento da empresa
+                if (empresa, None, ano, mes, "FOLHA") not in documentos_existentes:
+                    documentos_faltantes.append([empresa, "TODOS", ano, mes, "FOLHA"])
                 
-                
-                # Regras para CONTRACHEQUE e FÉRIAS
-                for funcionario in funcionarios:
+                for funcionario, data_admissao in funcionarios:
+                    if data_admissao:
+                        ano_admissao = data_admissao.year
+                        mes_admissao = data_admissao.month
+                        if (ano < ano_admissao) or (ano == ano_admissao and mes < mes_admissao):
+                            continue  # Ignora meses anteriores à admissão
+                    
                     tem_ferias = (empresa, funcionario, ano, mes, "FERIAS") in documentos_existentes
                     tem_contracheque = (empresa, funcionario, ano, mes, "CONTRACHEQUE") in documentos_existentes
                     
-                    # Se não há FÉRIAS e não há CONTRACHEQUE, então está faltando
                     if not tem_ferias and not tem_contracheque:
                         documentos_faltantes.append([empresa, funcionario, ano, mes, "CONTRACHEQUE"])
-                
-                # Regras para 13º Salário (meses 11 e 12)
-                if mes in [11, 12]:
-                    if (empresa, None, ano, mes, "FOLHA13") not in documentos_existentes:
-                        documentos_faltantes.append([empresa, "TODOS", ano, mes, "FOLHA13"])
                     
-                    for funcionario in funcionarios:
+                    # Regras para 13º Salário (meses 11 e 12)
+                    if mes in [11, 12]:
+                        if (empresa, None, ano, mes, "FOLHA13") not in documentos_existentes:
+                            documentos_faltantes.append([empresa, "TODOS", ano, mes, "FOLHA13"])
+                        
                         if (empresa, funcionario, ano, mes, "CONTRACHEQUE13") not in documentos_existentes:
                             documentos_faltantes.append([empresa, funcionario, ano, mes, "CONTRACHEQUE13"])
     
     df = pd.DataFrame(documentos_faltantes, columns=["Empresa", "Funcionário", "Ano", "Mês", "Tipo de Documento"])
     
-    nome_arquivo = "Relatorio_Auditoria.xlsx"
+    nome_arquivo = f"Relatorio_Auditoria_{empresa_filtro if empresa_filtro else 'Todas'}.xlsx"
     df.to_excel(nome_arquivo, index=False)
     print(f"Relatório gerado com sucesso: {nome_arquivo}")
 
 if __name__ == "__main__":
-    gerar_relatorio()
+    empresa_escolhida = input("Digite o nome da empresa para gerar o relatório (ou pressione Enter para todas): ")
+    empresa_escolhida = empresa_escolhida.strip() or None
+    gerar_relatorio(empresa_escolhida)

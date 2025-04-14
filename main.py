@@ -78,7 +78,7 @@ def inserir_documento(conn, empresa, funcionario, ano, mes, tipo, pdf_path):
 
 def processar_documentos():
     """ Processa os documentos da pasta e insere no banco apenas os que não existem. """
-    pasta_pdfs = "C:/Users/TERMINAL-3/OneDrive/CONTABILIDADE/ERIKY_SIMOES/PROJETO_AUDITORIA/PROJETO_AUDITORIA_PDFS"
+    pasta_pdfs = "C:/Users/TERMINAL-3/Desktop/PROJETO_AUDITORIA/PROJETO_AUDITORIA_PDFS"
     
     conn = conectar_banco()  # Abrir conexão antes do loop
 

@@ -79,7 +79,8 @@ def iniciar_processamento():
 
 def gerar_relatorio_auditoria():
     """Chama a função do check.py para gerar o relatório de auditoria."""
-    gerar_relatorio()
+    empresa_filtro = entry_empresa.get().strip()
+    gerar_relatorio(empresa_filtro)
     messagebox.showinfo("Sucesso", "Relatório gerado com sucesso!")
 
 # Criando a interface principal
